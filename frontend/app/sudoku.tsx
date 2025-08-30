@@ -131,13 +131,24 @@ export default function SudokuGame() {
     if (!selectedCell) return;
     
     const newGrid = gameGrid.map(row => [...row]);
+    const cellKey = `${selectedCell.row}-${selectedCell.col}`;
     
     if (number === 0) {
       // Clear cell
       newGrid[selectedCell.row][selectedCell.col] = 0;
+      setCellAnimations(prev => ({ ...prev, [cellKey]: null }));
     } else {
-      // Set number
+      // Set number and check if it's valid
       newGrid[selectedCell.row][selectedCell.col] = number;
+      const isValid = isValidPlacement(newGrid, selectedCell.row, selectedCell.col, number);
+      
+      // Set animation based on validity
+      setCellAnimations(prev => ({ ...prev, [cellKey]: isValid ? 'correct' : 'incorrect' }));
+      
+      // Clear animation after 1 second
+      setTimeout(() => {
+        setCellAnimations(prev => ({ ...prev, [cellKey]: null }));
+      }, 1000);
     }
     
     setGameGrid(newGrid);
