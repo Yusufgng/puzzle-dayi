@@ -380,6 +380,9 @@ export default function SudokuGame() {
       Math.floor(selectedCell.col / 3) === Math.floor(col / 3);
     const isInSameRowOrCol = selectedCell && 
       (selectedCell.row === row || selectedCell.col === col);
+    
+    const cellKey = `${row}-${col}`;
+    const animation = cellAnimations[cellKey];
 
     return [
       styles.cell,
@@ -387,6 +390,9 @@ export default function SudokuGame() {
       isSelected && styles.selectedCell,
       isInSameBox && !isSelected && styles.highlightedBox,
       isInSameRowOrCol && !isSelected && styles.highlightedRowCol,
+      // Animation styles
+      animation === 'correct' && styles.correctMove,
+      animation === 'incorrect' && styles.incorrectMove,
       // Border styles for 3x3 boxes
       (row + 1) % 3 === 0 && row !== 8 && styles.bottomBorder,
       (col + 1) % 3 === 0 && col !== 8 && styles.rightBorder,
