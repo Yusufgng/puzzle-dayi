@@ -229,7 +229,7 @@ async def update_user_progress(data: dict):
         progress = await db.user_progress.find_one({
             "user_id": "default_user",
             "game_type": game_type
-        })
+        }, {"_id": 0})  # Exclude MongoDB _id field
         
         if progress:
             # Update existing progress
