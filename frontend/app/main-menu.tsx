@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 const puzzleGames = [
   { id: 'sudoku', name: 'Sudoku', icon: '⚏', description: '9x9 sayı bulmacası', available: true },
-  { id: 'kriptogram', name: 'Kriptogram', icon: '🔤', description: 'Şifreli kelime bulmacası', available: false },
+  { id: 'kriptogram', name: 'Kriptogram', icon: '🔤', description: 'Şifreli kelime bulmacası', available: true },
   { id: 'gizli-kelime', name: 'Gizli Kelime', icon: '🔍', description: 'Kelime arama oyunu', available: false },
   { id: 'gruplanmis', name: 'Gruplanmış', icon: '📦', description: 'Kelime gruplandırma', available: false },
   { id: 'hashtag', name: 'Hashtag', icon: '#️⃣', description: 'Sosyal medya bulmacası', available: false },
