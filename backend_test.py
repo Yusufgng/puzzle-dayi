@@ -321,6 +321,9 @@ class KriptogramAPITester:
         # Test 7: Progress Retrieval
         self.test_progress_retrieval()
         
+        # Test 8: Turkish Content Verification
+        self.test_turkish_content_verification()
+        
         # Summary
         print("=" * 60)
         print("📊 TEST SUMMARY")
