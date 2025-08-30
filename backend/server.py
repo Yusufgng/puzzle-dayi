@@ -59,6 +59,17 @@ class SudokuPuzzle(BaseModel):
     solution: List[List[int]]  # 9x9 grid with complete solution
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
+class CryptogramPuzzle(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    level: int
+    difficulty: str
+    original_text: str
+    encrypted_text: str
+    cipher_key: dict  # mapping of original -> encrypted letters
+    category: str  # atasözü, deyim, güzel_söz
+    hint_letters: List[str] = []  # letters to show as hints
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
 # Sudoku Generator Functions
 def generate_complete_sudoku():
     """Generate a complete valid 9x9 Sudoku grid"""
