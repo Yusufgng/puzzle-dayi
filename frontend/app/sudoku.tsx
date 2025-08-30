@@ -217,6 +217,12 @@ export default function SudokuGame() {
     }
   };
 
+  const nextLevel = () => {
+    const newLevel = level + 1;
+    setLevel(newLevel);
+    loadNewPuzzle(newLevel);
+  };
+
   const handleHint = async () => {
     if (!currentPuzzle || hintsUsed >= 3) {
       Alert.alert(
