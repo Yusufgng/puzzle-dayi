@@ -217,10 +217,130 @@ export default function SudokuGame() {
     }
   };
 
-  const nextLevel = () => {
-    const newLevel = level + 1;
-    setLevel(newLevel);
-    loadNewPuzzle(newLevel);
+  const handleHint = async () => {
+    if (!currentPuzzle || hintsUsed >= 3) {
+      Alert.alert(
+        'İpucu Sınırı',
+        'Bu bölümde maksimum 3 ipucu kullanabilirsiniz.'
+      );
+      return;
+    }
+
+    try {
+      // Get the correct solution from backend
+      const response = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/api/sudoku/validate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          puzzle_id: currentPuzzle.id,
+          solution: gameGrid
+        })
+      });
+      const validation = await response.json();
+      
+      if (validation.correct_solution) {
+        const correctSolution = validation.correct_solution;
+        
+        // Find an empty cell that can be filled
+        const emptyCells = [];
+        for (let row = 0; row < 9; row++) {
+          for (let col = 0; col < 9; col++) {
+            if (gameGrid[row][col] === 0 && originalGrid[row][col] === 0) {
+              emptyCells.push({ row, col, value: correctSolution[row][col] });
+            }
+          }
+        }
+        
+        if (emptyCells.length > 0) {
+          // Randomly select an empty cell to fill
+          const randomCell = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+          
+          const newGrid = gameGrid.map(row => [...row]);
+          newGrid[randomCell.row][randomCell.col] = randomCell.value;
+          
+          setGameGrid(newGrid);
+          setHintsUsed(prev => prev + 1);
+          setMovesCount(prev => prev + 1);
+          
+          Alert.alert(
+            '💡 İpucu Kullanıldı',
+            `Satır ${randomCell.row + 1}, Sütun ${randomCell.col + 1} konumuna ${randomCell.value} sayısı yerleştirildi.\n\nKalan ipucu: ${2 - hintsUsed}`
+          );
+          
+          // Check if puzzle is completed after hint
+          if (isPuzzleComplete(newGrid)) {
+            setTimeout(() => handlePuzzleComplete(), 500);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error getting hint:', error);
+      Alert.alert('Hata', 'İpucu alınırken hata oluştu.');
+    }
+  };
+
+  const handleValidateMove = () => {
+    if (!currentPuzzle) return;
+
+    let incorrectCells = 0;
+    let emptyCells = 0;
+
+    for (let row = 0; row < 9; row++) {
+      for (let col = 0; col < 9; col++) {
+        if (originalGrid[row][col] === 0) { // Only check user-filled cells
+          if (gameGrid[row][col] === 0) {
+            emptyCells++;
+          } else {
+            // Check if the number is valid in current position
+            if (!isValidPlacement(gameGrid, row, col, gameGrid[row][col])) {
+              incorrectCells++;
+            }
+          }
+        }
+      }
+    }
+
+    if (incorrectCells > 0) {
+      Alert.alert(
+        '⚠️ Hatalı Hamle',
+        `${incorrectCells} adet hatalı sayı bulundu. Lütfen kontrol ediniz.`
+      );
+    } else if (emptyCells > 0) {
+      Alert.alert(
+        '✅ Doğru Yolda',
+        `Şu ana kadar tüm hamleleriniz doğru! ${emptyCells} hücre daha doldurmanız gerekiyor.`
+      );
+    }
+  };
+
+  const isValidPlacement = (grid: number[][], row: number, col: number, num: number) => {
+    // Check row
+    for (let j = 0; j < 9; j++) {
+      if (j !== col && grid[row][j] === num) {
+        return false;
+      }
+    }
+    
+    // Check column
+    for (let i = 0; i < 9; i++) {
+      if (i !== row && grid[i][col] === num) {
+        return false;
+      }
+    }
+    
+    // Check 3x3 box
+    const startRow = 3 * Math.floor(row / 3);
+    const startCol = 3 * Math.floor(col / 3);
+    
+    for (let i = startRow; i < startRow + 3; i++) {
+      for (let j = startCol; j < startCol + 3; j++) {
+        if ((i !== row || j !== col) && grid[i][j] === num) {
+          return false;
+        }
+      }
+    }
+    
+    return true;
   };
 
   const restartPuzzle = () => {
