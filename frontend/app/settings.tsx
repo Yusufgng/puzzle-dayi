@@ -119,13 +119,23 @@ export default function Settings() {
             </View>
             
             <View style={styles.creditItem}>
-              <Text style={styles.creditRole}>Tasarım & Konsept</Text>
-              <Text style={styles.creditName}>Puzzle Dayı Ekibi</Text>
+              <Text style={styles.creditRole}>Tasarım & UI/UX</Text>
+              <Text style={styles.creditName}>F. Yusuf Güngör</Text>
             </View>
             
             <View style={styles.creditItem}>
-              <Text style={styles.creditRole}>Test & Geliştirme</Text>
-              <Text style={styles.creditName}>Oyuncu Topluluğu</Text>
+              <Text style={styles.creditRole}>Oyun Algoritmaları</Text>
+              <Text style={styles.creditName}>F. Yusuf Güngör</Text>
+            </View>
+            
+            <View style={styles.creditItem}>
+              <Text style={styles.creditRole}>Backend Geliştirme</Text>
+              <Text style={styles.creditName}>F. Yusuf Güngör</Text>
+            </View>
+            
+            <View style={styles.creditItem}>
+              <Text style={styles.creditRole}>Proje Yöneticisi</Text>
+              <Text style={styles.creditName}>F. Yusuf Güngör</Text>
             </View>
           </View>
         </View>
