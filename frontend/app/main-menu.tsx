@@ -24,7 +24,7 @@ export default function MainMenu() {
 
   const handleGamePress = (gameId: string) => {
     if (gameId === 'sudoku') {
-      router.push('/sudoku');
+      router.push('/sudoku-levels');
     } else {
       // Show coming soon message
       alert('Bu oyun henüz hazır değil. Yakında eklenecek!');
