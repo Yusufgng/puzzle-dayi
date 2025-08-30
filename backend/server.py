@@ -194,6 +194,8 @@ async def validate_sudoku(data: dict):
             "correct_solution": correct_solution if not is_correct else None
         }
         
+    except HTTPException:
+        raise  # Re-raise HTTPException to preserve status code
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
