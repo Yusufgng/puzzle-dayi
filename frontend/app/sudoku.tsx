@@ -142,13 +142,16 @@ export default function SudokuGame() {
       newGrid[selectedCell.row][selectedCell.col] = number;
       const isValid = isValidPlacement(newGrid, selectedCell.row, selectedCell.col, number);
       
-      // Set animation based on validity
-      setCellAnimations(prev => ({ ...prev, [cellKey]: isValid ? 'correct' : 'incorrect' }));
-      
-      // Clear animation after 1 second
-      setTimeout(() => {
-        setCellAnimations(prev => ({ ...prev, [cellKey]: null }));
-      }, 1000);
+      if (isValid) {
+        // For correct moves, show blue briefly then clear
+        setCellAnimations(prev => ({ ...prev, [cellKey]: 'correct' }));
+        setTimeout(() => {
+          setCellAnimations(prev => ({ ...prev, [cellKey]: null }));
+        }, 800);
+      } else {
+        // For incorrect moves, keep red permanently
+        setCellAnimations(prev => ({ ...prev, [cellKey]: 'incorrect' }));
+      }
     }
     
     setGameGrid(newGrid);
