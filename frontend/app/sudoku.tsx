@@ -740,4 +740,10 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#ffffff',
   },
+  disabledBtn: {
+    opacity: 0.5,
+  },
+  disabledText: {
+    color: '#666',
+  },
 });
