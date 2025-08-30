@@ -36,11 +36,18 @@ export default function SudokuGame() {
   const [movesCount, setMovesCount] = useState(0);
   
   const router = useRouter();
+  const params = useLocalSearchParams();
 
   // Load user progress on component mount
   useEffect(() => {
-    loadUserProgress();
-  }, []);
+    const levelParam = params.level ? parseInt(params.level as string) : null;
+    if (levelParam) {
+      setLevel(levelParam);
+      loadNewPuzzle(levelParam);
+    } else {
+      loadUserProgress();
+    }
+  }, [params.level]);
 
   const loadUserProgress = async () => {
     try {
