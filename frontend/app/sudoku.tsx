@@ -504,11 +504,17 @@ export default function SudokuGame() {
 
       {/* Actions */}
       <View style={styles.actionsContainer}>
-        <TouchableOpacity style={styles.actionBtn} onPress={() => {}}>
-          <Ionicons name="help-circle-outline" size={24} color="#4ecdc4" />
-          <Text style={styles.actionBtnText}>İpucu</Text>
+        <TouchableOpacity 
+          style={[styles.actionBtn, hintsUsed >= 3 && styles.disabledBtn]} 
+          onPress={handleHint}
+          disabled={hintsUsed >= 3}
+        >
+          <Ionicons name="help-circle-outline" size={24} color={hintsUsed >= 3 ? "#666" : "#4ecdc4"} />
+          <Text style={[styles.actionBtnText, hintsUsed >= 3 && styles.disabledText]}>
+            İpucu ({3 - hintsUsed})
+          </Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.actionBtn} onPress={() => {}}>
+        <TouchableOpacity style={styles.actionBtn} onPress={handleValidateMove}>
           <Ionicons name="checkmark-circle-outline" size={24} color="#4ecdc4" />
           <Text style={styles.actionBtnText}>Kontrol Et</Text>
         </TouchableOpacity>
