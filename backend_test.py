@@ -155,6 +155,33 @@ class KriptogramAPITester:
             self.log_test("Specific Level", False, f"Request error: {str(e)}")
             return None
     
+    def test_turkish_content_verification(self):
+        """Test 8: Verify Turkish content across levels"""
+        try:
+            # Check first 10 levels for Turkish content
+            turkish_levels = 0
+            total_checked = 10
+            
+            for level_num in range(1, total_checked + 1):
+                response = self.session.get(f"{self.base_url}/cryptogram/level/{level_num}")
+                if response.status_code == 200:
+                    level = response.json()
+                    original_text = level.get("original_text", "")
+                    if any(char in "ÇĞIİÖŞÜ" for char in original_text):
+                        turkish_levels += 1
+            
+            # At least 70% should have Turkish characters
+            percentage = (turkish_levels / total_checked) * 100
+            if percentage >= 70:
+                self.log_test("Turkish Content Verification", True, f"{turkish_levels}/{total_checked} levels ({percentage:.1f}%) contain Turkish characters")
+                return True
+            else:
+                self.log_test("Turkish Content Verification", False, f"Only {turkish_levels}/{total_checked} levels ({percentage:.1f}%) contain Turkish characters")
+                return False
+        except Exception as e:
+            self.log_test("Turkish Content Verification", False, f"Request error: {str(e)}")
+            return False
+    
     def test_solution_check(self, level_data):
         """Test 5: Solution Check - POST /api/cryptogram/check-solution"""
         if not level_data:
