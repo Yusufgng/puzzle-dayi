@@ -34,6 +34,7 @@ export default function SudokuGame() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [hintsUsed, setHintsUsed] = useState(0);
   const [movesCount, setMovesCount] = useState(0);
+  const [cellAnimations, setCellAnimations] = useState<{[key: string]: 'correct' | 'incorrect' | null}>({});
   
   const router = useRouter();
   const params = useLocalSearchParams();
