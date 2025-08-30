@@ -335,6 +335,194 @@ async def end_game_session(data: dict):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# Kriptogram API Routes
+@api_router.get("/cryptogram/new/{level}")
+async def get_new_cryptogram(level: int):
+    """Generate a new Cryptogram puzzle for given level"""
+    try:
+        # Determine difficulty based on level
+        if level <= 10:
+            difficulty = 'kolay'
+            time_limit = 300  # 5 minutes
+        elif level <= 20:
+            difficulty = 'orta'
+            time_limit = 450  # 7.5 minutes
+        elif level <= 30:
+            difficulty = 'zor'
+            time_limit = 600  # 10 minutes
+        else:
+            difficulty = 'uzman'
+            time_limit = 900  # 15 minutes
+        
+        # Turkish sample texts for cryptograms
+        sample_texts = [
+            # Easy levels (1-10)
+            "MERHABA DUNYA",
+            "BUGÜN HAVA ÇOK GÜZEL",
+            "KITAP OKUMAK FAYDALIDIR",
+            "SPOR YAPMAK SAĞLIKLIDIR",
+            "MÜZIK DİNLEMEK KEYİFLİDİR",
+            "BAHÇEDE ÇİÇEKLER AÇMIŞ",
+            "KEDI EVE GELDİ",
+            "OKULA GİTMEK LAZIM",
+            "YEMEK PİŞİRMEK ZEVKLI",
+            "ARKADAŞ OLMAK GÜZEL",
+            
+            # Medium levels (11-20)
+            "HAYAT BİR MACERA GİBİ GEÇİP GİDER",
+            "BİLGİ GÜÇ DEMEKTİR VE ÖĞRENMEKTİR",
+            "DOSTLUK EN DEĞERLİ HAZINE SAYILIR",
+            "SABIR VE AZIM HER ŞEYİN ÜSTESİNDEN GELİR",
+            "GÜZEL GÜNLER HEP BERABER YAŞANIR",
+            "UMUT HİÇBİR ZAMAN TÜKENMEYECEKTİR",
+            "ÇALIŞKAN İNSAN HEP BAŞARILI OLUR",
+            "DOĞA ANA HEPİMİZİN ORTAK EVİDİR",
+            "SANAT RUHU BESLEYEN BİR BESİN KAYNAĞI",
+            "SEVGİ VE SAYGI İLE DÜNYA DAHA GÜZEL",
+            
+            # Hard levels (21-30)
+            "İNSAN YAŞADIĞI SÜRECE ÖĞRENMEYE VE GELİŞMEYE DEVAM ETMELİDİR",
+            "BAŞARI SADECE ÇALIŞMAKLA DEĞİL AKILLI ÇALIŞMAKLA ELDE EDİLİR",
+            "GERÇEK MUTLULUK İÇİMİZDEN GELEN BİR HİSSİR VE PAYLAŞTIKÇA ARTAR",
+            "BİLİM VE TEKNOLOJİ İNSANLIĞIN GELECEK NESİLLERE ARMAĞANDIR",
+            "KÜLTÜR VE SANAT BİR MİLLETİN AYNASI VE TAHİLİNİN GÖSTERGESİDİR",
+            "ÇEVRE KORUMA BİLİNCİ GELECEK NESİLLERE KALACAK EN BÜYÜK MİRASTIR",
+            "EĞİTİM SİSTEMİ BİR ÜLKENIN KALKINMASINDA EN ÖNEMLİ ETKEN SAYILIR",
+            "TOPLUMSAL DAYANIŞMA VE YARDIMLAŞMA MEDENİYETİN TEMELİ OLUŞTURUR",
+            "DİL VE KÜLTÜR KORUMA BİR MİLLETİN VAR OLMA MÜCADELESİNİN PARÇASIDIR",
+            "BARIŞÇIL BİR DÜNYA İÇİN TÜM İNSANLAR BİRLİKTE ÇALIŞMALI VE SAVAŞMALDIR",
+            
+            # Expert levels (31-40)
+            "FELSEFİ DÜŞÜNCE İNSANIN VARLIK SERÜVENİNDE EN DEĞERLİ REHBERLERDEN BİRİDİR VE HAYATIN ANLAM ARAYIŞINDA BİZE YOL GÖSTERİR",
+            "PSİKOLOJİK SAĞLIK FİZİKSEL SAĞLIK KADAR ÖNEMLİDİR VE İNSANIN TOPLUMSAL İLİŞKİLERİNDE VE KİŞİSEL GELİŞİMİNDE TEMEL ROL OYNAR",
+            "KÜRESEL İKLİM DEĞİŞİKLİĞİ GÜNÜMÜZün EN CİDDİ PROBLEMLERİNDEN BİRİ HALINE GELMİŞ VE ÇÖZÜMÜ TÜM İNSANLIĞIN ORTAK SORUMLULUĞUDUR",
+            "YAPAY ZEKA VE OTOMASYON TEKNOLOJİLERİ ÇALIŞMA HAYATINI KÖKTEN DEĞİŞTİRMEKTE VE YENİ BECERİLER KAZANMAYI ZORUNLU HALE GETİRMEKTEDİR",
+            "SOSYAL MEDYA VE DİJİTAL İLETİŞİM ARAÇLARI İNSAN İLİŞKİLERİNİ YENİDEN ŞEKİLLENDİRİRKEN AYNI ZAMANDA YENİ SORUNLAR DA YARATMAKTADIR",
+            "BİYOETİK KONULARI MODERN TIP VE BİLİMİN GELİŞİMİ İLE BİRLİKTE DAHA KARMAŞIK HALE GELMİŞ VE ETİK KURULLARIN ROLÜNÜ ARTIRMAKTADIR",
+            "UZAY ARAŞTIRMALARI VE KEŞİFLERİ İNSANLIĞIN EVREN HAKKINDAKİ BİLGİLERİNİ GENİŞLETMEKTE VE GELECEKTEKİ YAŞAMIMIZı ETKİLEYECEK BULUŞLARA YOL AÇMAKTADIR",
+            "KÜLTÜRLERARASı DİYALOG VE ANLAYIŞ KÜRESEL BARIŞIN TESİSİNDE EN ÖNEMLİ FAKTÖRLERDEN BİRİ OLARAK KABUL EDİLMEKTE VE ÇATIŞMALARIN ÇÖZÜMÜNDE ROL OYNAMAKTADIR",
+            "SÜRDÜRÜLEBİLİR KALKINMA HEDEFLERİ ÇEVRECİ YAKLAŞIMLAR VE EKONOMİK BÜYÜME ARASINDAKİ DENGEYİ KORUYARAK GELECEK NESİLLERE YAŞANIR BİR DÜNYA BIRAKMAYI AMAÇLAMAKTADIR",
+            "İNSAN HAKLARI VE DEMOKRASİ PRENSİPLERİ KÜRESEL ÇAPta KABUL GÖREN EVRENSEL DEĞERLER HALİNE GELMİŞ OLSA DA FARKLI KÜLTÜRLER VE SİSTEMLER ARASINDA UYGULAMA FARKLILIKLARI YAŞANMAYA DEVAM ETMEKTEDİR"
+        ]
+        
+        # Get text for this level (cycle through if needed)
+        text_index = (level - 1) % len(sample_texts)
+        original_text = sample_texts[text_index]
+        
+        # Create cipher mapping
+        alphabet = "ABCÇDEFGĞHIİJKLMNOÖPQRSŞTUÜVWXYZ"
+        shuffled = list(alphabet)
+        random.Random(level * 42).shuffle(shuffled)  # Deterministic shuffle based on level
+        cipher_map = dict(zip(alphabet, shuffled))
+        
+        # Encrypt text
+        encrypted_text = ""
+        for char in original_text:
+            if char in cipher_map:
+                encrypted_text += cipher_map[char]
+            else:
+                encrypted_text += char
+        
+        # Create hint letters (reveal 2-3 letters)
+        unique_letters = [k for k in cipher_map.keys() if k in original_text]
+        num_hints = min(3, len(unique_letters))
+        hint_letters = random.Random(level * 123).sample(unique_letters, num_hints)
+        
+        # Save to database
+        cryptogram_puzzle = CryptogramPuzzle(
+            level=level,
+            difficulty=difficulty,
+            original_text=original_text,
+            encrypted_text=encrypted_text,
+            cipher_key=cipher_map,
+            category="genel",
+            hint_letters=hint_letters
+        )
+        
+        await db.cryptogram_puzzles.insert_one(cryptogram_puzzle.dict())
+        
+        return {
+            "id": cryptogram_puzzle.id,
+            "level": level,
+            "difficulty": difficulty,
+            "encrypted_text": encrypted_text,
+            "hint_letters": hint_letters,
+            "time_limit": time_limit
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/cryptogram/validate")
+async def validate_cryptogram(data: dict):
+    """Validate if the submitted Cryptogram solution is correct"""
+    try:
+        puzzle_id = data.get("puzzle_id")
+        user_mapping = data.get("mapping", {})  # user's letter mappings
+        
+        # Get the original puzzle from database
+        puzzle_doc = await db.cryptogram_puzzles.find_one({"id": puzzle_id})
+        if not puzzle_doc:
+            raise HTTPException(status_code=404, detail="Puzzle not found")
+        
+        correct_cipher_key = puzzle_doc["cipher_key"]
+        original_text = puzzle_doc["original_text"]
+        
+        # Check if user mapping matches the correct cipher
+        # We need to reverse the cipher_key (encrypted -> original)
+        reverse_cipher = {v: k for k, v in correct_cipher_key.items()}
+        
+        # Apply user's mapping to encrypted text to see if we get original
+        encrypted_text = puzzle_doc["encrypted_text"]
+        user_decoded = ""
+        
+        for char in encrypted_text:
+            if char in user_mapping:
+                user_decoded += user_mapping[char]
+            else:
+                user_decoded += char
+        
+        is_correct = user_decoded == original_text
+        
+        return {
+            "is_correct": is_correct,
+            "original_text": original_text if not is_correct else original_text,
+            "correct_mapping": reverse_cipher if not is_correct else None
+        }
+        
+    except HTTPException:
+        raise  
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/cryptogram/hint/{puzzle_id}")
+async def get_cryptogram_hint(puzzle_id: str):
+    """Get a hint for the cryptogram puzzle"""
+    try:
+        puzzle_doc = await db.cryptogram_puzzles.find_one({"id": puzzle_id})
+        if not puzzle_doc:
+            raise HTTPException(status_code=404, detail="Puzzle not found")
+        
+        hint_letters = puzzle_doc.get("hint_letters", [])
+        cipher_key = puzzle_doc["cipher_key"]
+        
+        # Create hint mapping
+        hint_mapping = {}
+        for letter in hint_letters:
+            if letter in cipher_key:
+                encrypted_letter = cipher_key[letter]
+                hint_mapping[encrypted_letter] = letter
+        
+        return {
+            "hint_mapping": hint_mapping,
+            "hint_count": len(hint_letters)
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 # Include the router in the main app
 app.include_router(api_router)
 
