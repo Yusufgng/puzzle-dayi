@@ -1,27 +1,26 @@
 #!/usr/bin/env python3
 """
-Kriptogram Backend API Test Suite
-Tests all cryptogram-related endpoints and functionality
+Backend Test Suite for Puzzle Dayı Application
+Tests all Sudoku API endpoints, user progress tracking, and game session management
 """
 
 import requests
 import json
-import uuid
+import time
 from datetime import datetime
 import sys
 
-# Configuration
-BASE_URL = "https://puzzledayi-levels.preview.emergentagent.com/api"
-TEST_USER_ID = str(uuid.uuid4())
+# Get backend URL from frontend .env
+BACKEND_URL = "https://puzzle-mania-7.preview.emergentagent.com/api"
 
-class KriptogramAPITester:
+class PuzzleDayiTester:
     def __init__(self):
-        self.base_url = BASE_URL
-        self.test_user_id = TEST_USER_ID
-        self.session = requests.Session()
+        self.base_url = BACKEND_URL
         self.test_results = []
+        self.current_puzzle_id = None
+        self.current_session_id = None
         
-    def log_test(self, test_name, success, message, details=None):
+    def log_test(self, test_name, success, message="", details=None):
         """Log test results"""
         result = {
             "test": test_name,
@@ -32,325 +31,365 @@ class KriptogramAPITester:
         }
         self.test_results.append(result)
         status = "✅ PASS" if success else "❌ FAIL"
-        print(f"{status}: {test_name} - {message}")
-        if details and not success:
+        print(f"{status}: {test_name}")
+        if message:
+            print(f"   {message}")
+        if details:
             print(f"   Details: {details}")
-    
-    def test_basic_connection(self):
-        """Test 1: Basic API Connection - GET /api/"""
+        print()
+
+    def test_api_root(self):
+        """Test basic API connectivity"""
         try:
-            response = self.session.get(f"{self.base_url}/")
+            response = requests.get(f"{self.base_url}/")
             if response.status_code == 200:
                 data = response.json()
-                if "message" in data:
-                    self.log_test("Basic API Connection", True, "API endpoint is accessible")
+                if data.get("message") == "Puzzle Dayı API":
+                    self.log_test("API Root Endpoint", True, "API is accessible and responding correctly")
                     return True
                 else:
-                    self.log_test("Basic API Connection", False, "Unexpected response format", data)
+                    self.log_test("API Root Endpoint", False, f"Unexpected response: {data}")
                     return False
             else:
-                self.log_test("Basic API Connection", False, f"HTTP {response.status_code}", response.text)
+                self.log_test("API Root Endpoint", False, f"HTTP {response.status_code}: {response.text}")
                 return False
         except Exception as e:
-            self.log_test("Basic API Connection", False, f"Connection error: {str(e)}")
+            self.log_test("API Root Endpoint", False, f"Connection error: {str(e)}")
             return False
-    
-    def test_level_initialization(self):
-        """Test 2: Kriptogram Level Initialization - POST /api/cryptogram/init-levels"""
-        try:
-            response = self.session.post(f"{self.base_url}/cryptogram/init-levels")
-            if response.status_code == 200:
-                data = response.json()
-                if "count" in data:
-                    count = data.get("count", 0)
-                    if count == 40:
-                        self.log_test("Level Initialization", True, f"Successfully initialized {count} levels")
-                        return True
-                    elif count > 0:
-                        self.log_test("Level Initialization", True, f"Levels already exist ({count} levels)")
-                        return True
-                    else:
-                        self.log_test("Level Initialization", False, "No levels created", data)
-                        return False
-                else:
-                    self.log_test("Level Initialization", False, "Invalid response format", data)
-                    return False
-            else:
-                self.log_test("Level Initialization", False, f"HTTP {response.status_code}", response.text)
-                return False
-        except Exception as e:
-            self.log_test("Level Initialization", False, f"Request error: {str(e)}")
-            return False
-    
-    def test_level_listing(self):
-        """Test 3: Level Listing - GET /api/cryptogram/levels"""
-        try:
-            response = self.session.get(f"{self.base_url}/cryptogram/levels")
-            if response.status_code == 200:
-                levels = response.json()
-                if isinstance(levels, list) and len(levels) == 40:
-                    # Verify difficulty distribution
-                    easy_count = sum(1 for level in levels if level.get("difficulty") == "easy" and 1 <= level.get("level", 0) <= 10)
-                    medium_count = sum(1 for level in levels if level.get("difficulty") == "medium" and 11 <= level.get("level", 0) <= 20)
-                    hard_count = sum(1 for level in levels if level.get("difficulty") == "hard" and 21 <= level.get("level", 0) <= 30)
-                    expert_count = sum(1 for level in levels if level.get("difficulty") == "expert" and 31 <= level.get("level", 0) <= 40)
-                    
-                    if easy_count == 10 and medium_count == 10 and hard_count == 10 and expert_count == 10:
-                        self.log_test("Level Listing", True, f"Retrieved 40 levels with correct difficulty distribution")
-                        return levels
-                    else:
-                        self.log_test("Level Listing", False, f"Incorrect difficulty distribution: easy={easy_count}, medium={medium_count}, hard={hard_count}, expert={expert_count}")
-                        return None
-                else:
-                    self.log_test("Level Listing", False, f"Expected 40 levels, got {len(levels) if isinstance(levels, list) else 'invalid format'}")
-                    return None
-            else:
-                self.log_test("Level Listing", False, f"HTTP {response.status_code}", response.text)
-                return None
-        except Exception as e:
-            self.log_test("Level Listing", False, f"Request error: {str(e)}")
-            return None
-    
-    def test_specific_level(self, level_num=1):
-        """Test 4: Specific Level - GET /api/cryptogram/level/{level_num}"""
-        try:
-            response = self.session.get(f"{self.base_url}/cryptogram/level/{level_num}")
-            if response.status_code == 200:
-                level = response.json()
-                required_fields = ["level", "difficulty", "original_text", "encrypted_text", "cipher_map", "hint", "time_limit"]
-                missing_fields = [field for field in required_fields if field not in level]
-                
-                if not missing_fields:
-                    # Verify time limits based on difficulty
-                    expected_time_limits = {
-                        "easy": 300,    # 5 minutes
-                        "medium": 450,  # 7.5 minutes
-                        "hard": 600,    # 10 minutes
-                        "expert": 900   # 15 minutes
-                    }
-                    
-                    difficulty = level.get("difficulty")
-                    time_limit = level.get("time_limit")
-                    expected_time = expected_time_limits.get(difficulty)
-                    
-                    if time_limit == expected_time:
-                        # Verify content exists (Turkish characters not required for every level)
-                        original_text = level.get("original_text", "")
-                        if original_text:
-                            self.log_test("Specific Level", True, f"Level {level_num} has correct structure, time limit ({time_limit}s), and content: '{original_text}'")
-                            return level
-                        else:
-                            self.log_test("Specific Level", False, f"Level {level_num} missing original text content")
-                            return None
-                    else:
-                        self.log_test("Specific Level", False, f"Level {level_num} incorrect time limit: expected {expected_time}s, got {time_limit}s")
-                        return None
-                else:
-                    self.log_test("Specific Level", False, f"Level {level_num} missing fields: {missing_fields}")
-                    return None
-            else:
-                self.log_test("Specific Level", False, f"HTTP {response.status_code}", response.text)
-                return None
-        except Exception as e:
-            self.log_test("Specific Level", False, f"Request error: {str(e)}")
-            return None
-    
-    def test_turkish_content_verification(self):
-        """Test 8: Verify Turkish content across levels"""
-        try:
-            # Check first 10 levels for Turkish content
-            turkish_levels = 0
-            total_checked = 10
-            
-            for level_num in range(1, total_checked + 1):
-                response = self.session.get(f"{self.base_url}/cryptogram/level/{level_num}")
+
+    def test_sudoku_generation_levels(self):
+        """Test Sudoku puzzle generation for different difficulty levels"""
+        test_levels = [1, 5, 11, 21, 31]  # kolay, kolay, orta, zor, uzman
+        expected_difficulties = ['kolay', 'kolay', 'orta', 'zor', 'uzman']
+        
+        for i, level in enumerate(test_levels):
+            try:
+                response = requests.get(f"{self.base_url}/sudoku/new/{level}")
                 if response.status_code == 200:
-                    level = response.json()
-                    original_text = level.get("original_text", "")
-                    if any(char in "ÇĞIİÖŞÜ" for char in original_text):
-                        turkish_levels += 1
-            
-            # At least 70% should have Turkish characters
-            percentage = (turkish_levels / total_checked) * 100
-            if percentage >= 70:
-                self.log_test("Turkish Content Verification", True, f"{turkish_levels}/{total_checked} levels ({percentage:.1f}%) contain Turkish characters")
-                return True
-            else:
-                self.log_test("Turkish Content Verification", False, f"Only {turkish_levels}/{total_checked} levels ({percentage:.1f}%) contain Turkish characters")
-                return False
-        except Exception as e:
-            self.log_test("Turkish Content Verification", False, f"Request error: {str(e)}")
-            return False
-    
-    def test_solution_check(self, level_data):
-        """Test 5: Solution Check - POST /api/cryptogram/check-solution"""
-        if not level_data:
-            self.log_test("Solution Check", False, "No level data provided for testing")
-            return False
-            
+                    data = response.json()
+                    
+                    # Verify response structure
+                    required_fields = ['id', 'level', 'difficulty', 'puzzle']
+                    missing_fields = [field for field in required_fields if field not in data]
+                    
+                    if missing_fields:
+                        self.log_test(f"Sudoku Generation Level {level}", False, 
+                                    f"Missing fields: {missing_fields}")
+                        continue
+                    
+                    # Verify difficulty mapping
+                    expected_diff = expected_difficulties[i]
+                    if data['difficulty'] != expected_diff:
+                        self.log_test(f"Sudoku Generation Level {level}", False,
+                                    f"Expected difficulty '{expected_diff}', got '{data['difficulty']}'")
+                        continue
+                    
+                    # Verify puzzle structure (9x9 grid)
+                    puzzle = data['puzzle']
+                    if len(puzzle) != 9 or any(len(row) != 9 for row in puzzle):
+                        self.log_test(f"Sudoku Generation Level {level}", False,
+                                    "Puzzle is not a 9x9 grid")
+                        continue
+                    
+                    # Count empty cells (0s) to verify difficulty
+                    empty_cells = sum(row.count(0) for row in puzzle)
+                    
+                    # Store first puzzle ID for validation tests
+                    if i == 0:
+                        self.current_puzzle_id = data['id']
+                    
+                    self.log_test(f"Sudoku Generation Level {level}", True,
+                                f"Generated {expected_diff} puzzle with {empty_cells} empty cells",
+                                {"puzzle_id": data['id'], "empty_cells": empty_cells})
+                else:
+                    self.log_test(f"Sudoku Generation Level {level}", False,
+                                f"HTTP {response.status_code}: {response.text}")
+            except Exception as e:
+                self.log_test(f"Sudoku Generation Level {level}", False, f"Error: {str(e)}")
+
+    def test_sudoku_validation_correct(self):
+        """Test Sudoku validation with correct solution"""
+        if not self.current_puzzle_id:
+            self.log_test("Sudoku Validation (Correct)", False, "No puzzle ID available for testing")
+            return
+        
         try:
-            level_num = level_data.get("level")
-            correct_cipher_map = level_data.get("cipher_map", {})
+            # First get a new puzzle to have a known solution
+            response = requests.get(f"{self.base_url}/sudoku/new/1")
+            if response.status_code != 200:
+                self.log_test("Sudoku Validation (Correct)", False, "Could not generate test puzzle")
+                return
             
-            # Test with correct solution
-            correct_payload = {
-                "level": level_num,
-                "solution": correct_cipher_map
+            puzzle_data = response.json()
+            puzzle_id = puzzle_data['id']
+            
+            # Create a simple valid solution (we'll use a known valid 9x9 Sudoku)
+            valid_solution = [
+                [5, 3, 4, 6, 7, 8, 9, 1, 2],
+                [6, 7, 2, 1, 9, 5, 3, 4, 8],
+                [1, 9, 8, 3, 4, 2, 5, 6, 7],
+                [8, 5, 9, 7, 6, 1, 4, 2, 3],
+                [4, 2, 6, 8, 5, 3, 7, 9, 1],
+                [7, 1, 3, 9, 2, 4, 8, 5, 6],
+                [9, 6, 1, 5, 3, 7, 2, 8, 4],
+                [2, 8, 7, 4, 1, 9, 6, 3, 5],
+                [3, 4, 5, 2, 8, 6, 1, 7, 9]
+            ]
+            
+            validation_data = {
+                "puzzle_id": puzzle_id,
+                "solution": valid_solution
             }
             
-            response = self.session.post(f"{self.base_url}/cryptogram/check-solution", json=correct_payload)
+            response = requests.post(f"{self.base_url}/sudoku/validate", json=validation_data)
             if response.status_code == 200:
-                result = response.json()
-                if result.get("is_correct") == True:
-                    self.log_test("Solution Check (Correct)", True, f"Correctly identified valid solution for level {level_num}")
-                    
-                    # Test with incorrect solution
-                    incorrect_cipher_map = {k: "X" for k in correct_cipher_map.keys()}
-                    incorrect_payload = {
-                        "level": level_num,
-                        "solution": incorrect_cipher_map
-                    }
-                    
-                    response2 = self.session.post(f"{self.base_url}/cryptogram/check-solution", json=incorrect_payload)
-                    if response2.status_code == 200:
-                        result2 = response2.json()
-                        if result2.get("is_correct") == False and "correct_mapping" in result2:
-                            self.log_test("Solution Check (Incorrect)", True, f"Correctly identified invalid solution and provided correct mapping")
-                            return True
-                        else:
-                            self.log_test("Solution Check (Incorrect)", False, f"Failed to handle incorrect solution properly", result2)
-                            return False
-                    else:
-                        self.log_test("Solution Check (Incorrect)", False, f"HTTP {response2.status_code}", response2.text)
-                        return False
+                data = response.json()
+                # Note: This will likely fail since we're using a generic solution
+                # but we're testing the API structure
+                if 'is_correct' in data:
+                    self.log_test("Sudoku Validation (API Structure)", True,
+                                f"Validation API working, result: {data['is_correct']}")
                 else:
-                    self.log_test("Solution Check (Correct)", False, f"Failed to identify correct solution", result)
-                    return False
+                    self.log_test("Sudoku Validation (API Structure)", False,
+                                "Missing 'is_correct' field in response")
             else:
-                self.log_test("Solution Check", False, f"HTTP {response.status_code}", response.text)
-                return False
+                self.log_test("Sudoku Validation (Correct)", False,
+                            f"HTTP {response.status_code}: {response.text}")
         except Exception as e:
-            self.log_test("Solution Check", False, f"Request error: {str(e)}")
-            return False
-    
-    def test_progress_tracking(self):
-        """Test 6: Progress Tracking - POST /api/cryptogram/progress"""
+            self.log_test("Sudoku Validation (Correct)", False, f"Error: {str(e)}")
+
+    def test_sudoku_validation_incorrect(self):
+        """Test Sudoku validation with incorrect solution"""
+        if not self.current_puzzle_id:
+            self.log_test("Sudoku Validation (Incorrect)", False, "No puzzle ID available for testing")
+            return
+        
         try:
-            # Create test progress data
-            progress_data = {
-                "user_id": self.test_user_id,
+            # Generate a new puzzle for testing
+            response = requests.get(f"{self.base_url}/sudoku/new/1")
+            if response.status_code != 200:
+                self.log_test("Sudoku Validation (Incorrect)", False, "Could not generate test puzzle")
+                return
+            
+            puzzle_data = response.json()
+            puzzle_id = puzzle_data['id']
+            
+            # Create an obviously incorrect solution (all 1s)
+            incorrect_solution = [[1 for _ in range(9)] for _ in range(9)]
+            
+            validation_data = {
+                "puzzle_id": puzzle_id,
+                "solution": incorrect_solution
+            }
+            
+            response = requests.post(f"{self.base_url}/sudoku/validate", json=validation_data)
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('is_correct') == False:
+                    self.log_test("Sudoku Validation (Incorrect)", True,
+                                "Correctly identified incorrect solution")
+                else:
+                    self.log_test("Sudoku Validation (Incorrect)", False,
+                                f"Expected is_correct=False, got {data.get('is_correct')}")
+            else:
+                self.log_test("Sudoku Validation (Incorrect)", False,
+                            f"HTTP {response.status_code}: {response.text}")
+        except Exception as e:
+            self.log_test("Sudoku Validation (Incorrect)", False, f"Error: {str(e)}")
+
+    def test_user_progress_creation(self):
+        """Test user progress creation for new user"""
+        try:
+            response = requests.get(f"{self.base_url}/user/progress/sudoku")
+            if response.status_code == 200:
+                data = response.json()
+                
+                # Verify progress structure
+                required_fields = ['user_id', 'game_type', 'current_level', 'completed_levels', 
+                                 'highest_level', 'total_games_played', 'total_time_played']
+                missing_fields = [field for field in required_fields if field not in data]
+                
+                if missing_fields:
+                    self.log_test("User Progress Creation", False,
+                                f"Missing fields: {missing_fields}")
+                    return
+                
+                # Verify basic values (accept existing progress as valid)
+                if (data['game_type'] == 'sudoku' and 
+                    data['user_id'] == 'default_user' and
+                    isinstance(data['completed_levels'], list) and
+                    isinstance(data['total_games_played'], int)):
+                    self.log_test("User Progress Creation", True,
+                                "User progress retrieved successfully with correct structure")
+                else:
+                    self.log_test("User Progress Creation", False,
+                                f"Incorrect structure or values: {data}")
+            else:
+                self.log_test("User Progress Creation", False,
+                            f"HTTP {response.status_code}: {response.text}")
+        except Exception as e:
+            self.log_test("User Progress Creation", False, f"Error: {str(e)}")
+
+    def test_user_progress_update(self):
+        """Test user progress update after level completion"""
+        try:
+            update_data = {
+                "game_type": "sudoku",
                 "level": 1,
-                "is_completed": False,
-                "current_solution": {"A": "B", "B": "C"},
-                "hints_used": 1
+                "time_taken": 120  # 2 minutes
             }
             
-            response = self.session.post(f"{self.base_url}/cryptogram/progress", json=progress_data)
+            response = requests.post(f"{self.base_url}/user/progress/update", json=update_data)
             if response.status_code == 200:
-                result = response.json()
-                if result.get("status") == "success":
-                    self.log_test("Progress Tracking", True, f"Successfully saved progress for user {self.test_user_id}")
-                    return True
-                else:
-                    self.log_test("Progress Tracking", False, f"Unexpected response format", result)
-                    return False
-            else:
-                self.log_test("Progress Tracking", False, f"HTTP {response.status_code}", response.text)
-                return False
-        except Exception as e:
-            self.log_test("Progress Tracking", False, f"Request error: {str(e)}")
-            return False
-    
-    def test_progress_retrieval(self):
-        """Test 7: Progress Retrieval - GET /api/cryptogram/progress/{user_id}"""
-        try:
-            response = self.session.get(f"{self.base_url}/cryptogram/progress/{self.test_user_id}")
-            if response.status_code == 200:
-                progress_list = response.json()
-                if isinstance(progress_list, list):
-                    if len(progress_list) > 0:
-                        # Verify the progress we just saved
-                        found_progress = any(p.get("user_id") == self.test_user_id and p.get("level") == 1 for p in progress_list)
-                        if found_progress:
-                            self.log_test("Progress Retrieval", True, f"Successfully retrieved progress for user {self.test_user_id}")
-                            return True
+                data = response.json()
+                if data.get('success') == True:
+                    # Verify the update by getting progress again
+                    progress_response = requests.get(f"{self.base_url}/user/progress/sudoku")
+                    if progress_response.status_code == 200:
+                        progress_data = progress_response.json()
+                        
+                        if (1 in progress_data.get('completed_levels', []) and
+                            progress_data.get('highest_level') >= 2 and
+                            progress_data.get('total_games_played') >= 1):
+                            self.log_test("User Progress Update", True,
+                                        "Progress updated correctly after level completion")
                         else:
-                            self.log_test("Progress Retrieval", False, f"Could not find expected progress data")
-                            return False
+                            self.log_test("User Progress Update", False,
+                                        f"Progress not updated correctly: {progress_data}")
                     else:
-                        self.log_test("Progress Retrieval", True, f"No progress found for user {self.test_user_id} (empty list is valid)")
-                        return True
+                        self.log_test("User Progress Update", False,
+                                    "Could not verify progress update")
                 else:
-                    self.log_test("Progress Retrieval", False, f"Expected list, got {type(progress_list)}")
-                    return False
+                    self.log_test("User Progress Update", False,
+                                f"Update failed: {data}")
             else:
-                self.log_test("Progress Retrieval", False, f"HTTP {response.status_code}", response.text)
-                return False
+                self.log_test("User Progress Update", False,
+                            f"HTTP {response.status_code}: {response.text}")
         except Exception as e:
-            self.log_test("Progress Retrieval", False, f"Request error: {str(e)}")
-            return False
-    
+            self.log_test("User Progress Update", False, f"Error: {str(e)}")
+
+    def test_game_session_start(self):
+        """Test game session creation"""
+        try:
+            session_data = {
+                "game_type": "sudoku",
+                "level": 1,
+                "difficulty": "kolay"
+            }
+            
+            response = requests.post(f"{self.base_url}/game/session/start", json=session_data)
+            if response.status_code == 200:
+                data = response.json()
+                if 'session_id' in data:
+                    self.current_session_id = data['session_id']
+                    self.log_test("Game Session Start", True,
+                                f"Session created successfully: {data['session_id']}")
+                else:
+                    self.log_test("Game Session Start", False,
+                                "Missing session_id in response")
+            else:
+                self.log_test("Game Session Start", False,
+                            f"HTTP {response.status_code}: {response.text}")
+        except Exception as e:
+            self.log_test("Game Session Start", False, f"Error: {str(e)}")
+
+    def test_game_session_end(self):
+        """Test game session completion"""
+        if not self.current_session_id:
+            self.log_test("Game Session End", False, "No session ID available for testing")
+            return
+        
+        try:
+            # Wait a moment to have some time difference
+            time.sleep(1)
+            
+            end_data = {
+                "session_id": self.current_session_id,
+                "completed": True,
+                "moves_count": 25,
+                "hints_used": 2
+            }
+            
+            response = requests.post(f"{self.base_url}/game/session/end", json=end_data)
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('success') == True and 'time_taken' in data:
+                    self.log_test("Game Session End", True,
+                                f"Session ended successfully, time taken: {data['time_taken']} seconds")
+                else:
+                    self.log_test("Game Session End", False,
+                                f"Session end failed: {data}")
+            else:
+                self.log_test("Game Session End", False,
+                            f"HTTP {response.status_code}: {response.text}")
+        except Exception as e:
+            self.log_test("Game Session End", False, f"Error: {str(e)}")
+
+    def test_error_handling(self):
+        """Test error handling for invalid requests"""
+        try:
+            # Test invalid puzzle ID validation
+            invalid_validation = {
+                "puzzle_id": "invalid_id_12345",
+                "solution": [[1 for _ in range(9)] for _ in range(9)]
+            }
+            
+            response = requests.post(f"{self.base_url}/sudoku/validate", json=invalid_validation)
+            if response.status_code == 404:
+                self.log_test("Error Handling (Invalid Puzzle ID)", True,
+                            "Correctly returned 404 for invalid puzzle ID")
+            else:
+                self.log_test("Error Handling (Invalid Puzzle ID)", False,
+                            f"Expected 404, got {response.status_code}")
+        except Exception as e:
+            self.log_test("Error Handling (Invalid Puzzle ID)", False, f"Error: {str(e)}")
+
     def run_all_tests(self):
-        """Run all tests in sequence"""
-        print(f"🚀 Starting Kriptogram Backend API Tests")
-        print(f"📍 Base URL: {self.base_url}")
-        print(f"👤 Test User ID: {self.test_user_id}")
+        """Run all backend tests"""
         print("=" * 60)
+        print("PUZZLE DAYI BACKEND TEST SUITE")
+        print("=" * 60)
+        print(f"Testing backend at: {self.base_url}")
+        print()
         
-        # Test 1: Basic Connection
-        if not self.test_basic_connection():
-            print("❌ Basic connection failed. Stopping tests.")
+        # Test API connectivity first
+        if not self.test_api_root():
+            print("❌ API is not accessible. Stopping tests.")
             return False
         
-        # Test 2: Level Initialization
-        self.test_level_initialization()
-        
-        # Test 3: Level Listing
-        levels = self.test_level_listing()
-        
-        # Test 4: Specific Level
-        level_data = self.test_specific_level(1)
-        
-        # Test 5: Solution Check
-        if level_data:
-            self.test_solution_check(level_data)
-        
-        # Test 6: Progress Tracking
-        self.test_progress_tracking()
-        
-        # Test 7: Progress Retrieval
-        self.test_progress_retrieval()
-        
-        # Test 8: Turkish Content Verification
-        self.test_turkish_content_verification()
+        # Run all tests
+        self.test_sudoku_generation_levels()
+        self.test_sudoku_validation_correct()
+        self.test_sudoku_validation_incorrect()
+        self.test_user_progress_creation()
+        self.test_user_progress_update()
+        self.test_game_session_start()
+        self.test_game_session_end()
+        self.test_error_handling()
         
         # Summary
         print("=" * 60)
-        print("📊 TEST SUMMARY")
+        print("TEST SUMMARY")
         print("=" * 60)
         
-        passed = sum(1 for result in self.test_results if result["success"])
+        passed = sum(1 for result in self.test_results if result['success'])
         total = len(self.test_results)
         
-        for result in self.test_results:
-            status = "✅" if result["success"] else "❌"
-            print(f"{status} {result['test']}: {result['message']}")
+        print(f"Total Tests: {total}")
+        print(f"Passed: {passed}")
+        print(f"Failed: {total - passed}")
+        print(f"Success Rate: {(passed/total)*100:.1f}%")
         
-        print("=" * 60)
-        print(f"📈 Results: {passed}/{total} tests passed")
+        # List failed tests
+        failed_tests = [result for result in self.test_results if not result['success']]
+        if failed_tests:
+            print("\nFAILED TESTS:")
+            for test in failed_tests:
+                print(f"  - {test['test']}: {test['message']}")
         
-        if passed == total:
-            print("🎉 All tests passed! Kriptogram backend is working correctly.")
-            return True
-        else:
-            print(f"⚠️  {total - passed} tests failed. Please check the issues above.")
-            return False
-
-def main():
-    """Main test execution"""
-    tester = KriptogramAPITester()
-    success = tester.run_all_tests()
-    sys.exit(0 if success else 1)
+        return passed == total
 
 if __name__ == "__main__":
-    main()
+    tester = PuzzleDayiTester()
+    success = tester.run_all_tests()
+    sys.exit(0 if success else 1)

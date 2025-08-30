@@ -11,7 +11,6 @@ import uuid
 from datetime import datetime
 import random
 
-
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
@@ -26,223 +25,315 @@ app = FastAPI()
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
 
-
-# Define Models
-class StatusCheck(BaseModel):
+# Models for User Progress
+class UserProgress(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    client_name: str
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    user_id: str = "default_user"  # For now, single user
+    game_type: str
+    current_level: int = 1
+    completed_levels: List[int] = []
+    highest_level: int = 1
+    total_games_played: int = 0
+    total_time_played: int = 0  # in seconds
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
 
-class StatusCheckCreate(BaseModel):
-    client_name: str
+class GameSession(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str = "default_user"
+    game_type: str
+    level: int
+    difficulty: str
+    start_time: datetime = Field(default_factory=datetime.utcnow)
+    end_time: Optional[datetime] = None
+    completed: bool = False
+    time_taken: Optional[int] = None  # in seconds
+    moves_count: Optional[int] = None
+    hints_used: int = 0
 
-# Kriptogram Models
-class CryptogramLevel(BaseModel):
+class SudokuPuzzle(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     level: int
-    difficulty: str  # easy, medium, hard, expert
-    original_text: str
-    encrypted_text: str
-    cipher_map: dict  # key mapping for encryption
-    hint: Optional[str] = None
-    time_limit: int = 600  # seconds
+    difficulty: str
+    puzzle: List[List[int]]  # 9x9 grid with 0 for empty cells
+    solution: List[List[int]]  # 9x9 grid with complete solution
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
-class CryptogramProgress(BaseModel):
+class CryptogramPuzzle(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    user_id: str
     level: int
-    is_completed: bool = False
-    current_solution: dict = {}  # user's current letter mappings
-    completion_time: Optional[int] = None  # in seconds
-    hints_used: int = 0
-    started_at: datetime = Field(default_factory=datetime.utcnow)
-    completed_at: Optional[datetime] = None
+    difficulty: str
+    original_text: str
+    encrypted_text: str
+    cipher_key: dict  # mapping of original -> encrypted letters
+    category: str  # atasözü, deyim, güzel_söz
+    hint_letters: List[str] = []  # letters to show as hints
+    created_at: datetime = Field(default_factory=datetime.utcnow)
 
-class CryptogramSolution(BaseModel):
-    level: int
-    solution: dict  # letter mappings
+# Sudoku Generator Functions
+def generate_complete_sudoku():
+    """Generate a complete valid 9x9 Sudoku grid"""
+    grid = [[0 for _ in range(9)] for _ in range(9)]
+    
+    def is_valid(grid, row, col, num):
+        # Check row
+        for j in range(9):
+            if grid[row][j] == num:
+                return False
+        
+        # Check column
+        for i in range(9):
+            if grid[i][col] == num:
+                return False
+        
+        # Check 3x3 box
+        start_row, start_col = 3 * (row // 3), 3 * (col // 3)
+        for i in range(start_row, start_row + 3):
+            for j in range(start_col, start_col + 3):
+                if grid[i][j] == num:
+                    return False
+        
+        return True
+    
+    def solve_sudoku(grid):
+        for row in range(9):
+            for col in range(9):
+                if grid[row][col] == 0:
+                    numbers = list(range(1, 10))
+                    random.shuffle(numbers)
+                    for num in numbers:
+                        if is_valid(grid, row, col, num):
+                            grid[row][col] = num
+                            if solve_sudoku(grid):
+                                return True
+                            grid[row][col] = 0
+                    return False
+        return True
+    
+    solve_sudoku(grid)
+    return grid
 
-# Add your routes to the router instead of directly to app
+def create_puzzle_from_solution(solution, difficulty):
+    """Create a puzzle by removing numbers from complete solution"""
+    puzzle = [row[:] for row in solution]  # Deep copy
+    
+    # Difficulty settings (number of cells to remove)
+    remove_counts = {
+        'kolay': 40,      # Easy: remove 40 cells
+        'orta': 50,       # Medium: remove 50 cells  
+        'zor': 60,        # Hard: remove 60 cells
+        'uzman': 65       # Expert: remove 65 cells
+    }
+    
+    cells_to_remove = remove_counts.get(difficulty, 40)
+    
+    # Get all cell positions
+    positions = [(i, j) for i in range(9) for j in range(9)]
+    random.shuffle(positions)
+    
+    # Remove numbers from random positions
+    for i in range(min(cells_to_remove, len(positions))):
+        row, col = positions[i]
+        puzzle[row][col] = 0
+    
+    return puzzle
+
+# API Routes
 @api_router.get("/")
 async def root():
-    return {"message": "Hello World"}
+    return {"message": "Puzzle Dayı API"}
 
-@api_router.post("/status", response_model=StatusCheck)
-async def create_status_check(input: StatusCheckCreate):
-    status_dict = input.dict()
-    status_obj = StatusCheck(**status_dict)
-    _ = await db.status_checks.insert_one(status_obj.dict())
-    return status_obj
-
-@api_router.get("/status", response_model=List[StatusCheck])
-async def get_status_checks():
-    status_checks = await db.status_checks.find().to_list(1000)
-    return [StatusCheck(**status_check) for status_check in status_checks]
-
-# Kriptogram Routes
-@api_router.get("/cryptogram/levels", response_model=List[CryptogramLevel])
-async def get_cryptogram_levels():
-    """Get all cryptogram levels"""
-    levels = await db.cryptogram_levels.find().sort("level", 1).to_list(1000)
-    return [CryptogramLevel(**level) for level in levels]
-
-@api_router.get("/cryptogram/level/{level_num}", response_model=CryptogramLevel)
-async def get_cryptogram_level(level_num: int):
-    """Get specific cryptogram level"""
-    level = await db.cryptogram_levels.find_one({"level": level_num})
-    if not level:
-        raise HTTPException(status_code=404, detail="Level not found")
-    return CryptogramLevel(**level)
-
-@api_router.post("/cryptogram/progress")
-async def save_cryptogram_progress(progress: CryptogramProgress):
-    """Save user's progress on a cryptogram level"""
-    # Update existing progress or create new
-    existing = await db.cryptogram_progress.find_one({
-        "user_id": progress.user_id,
-        "level": progress.level
-    })
-    
-    if existing:
-        await db.cryptogram_progress.update_one(
-            {"_id": existing["_id"]},
-            {"$set": progress.dict(exclude={"id"})}
-        )
-    else:
-        await db.cryptogram_progress.insert_one(progress.dict())
-    
-    return {"status": "success"}
-
-@api_router.get("/cryptogram/progress/{user_id}")
-async def get_user_progress(user_id: str):
-    """Get user's progress across all levels"""
-    progress = await db.cryptogram_progress.find({"user_id": user_id}).to_list(1000)
-    return [CryptogramProgress(**p) for p in progress]
-
-@api_router.post("/cryptogram/check-solution")
-async def check_cryptogram_solution(solution: CryptogramSolution):
-    """Check if the user's solution is correct"""
-    level = await db.cryptogram_levels.find_one({"level": solution.level})
-    if not level:
-        raise HTTPException(status_code=404, detail="Level not found")
-    
-    level_obj = CryptogramLevel(**level)
-    is_correct = solution.solution == level_obj.cipher_map
-    
-    return {
-        "is_correct": is_correct,
-        "correct_mapping": level_obj.cipher_map if not is_correct else None
-    }
-
-@api_router.post("/cryptogram/init-levels")
-async def initialize_cryptogram_levels():
-    """Initialize cryptogram levels with sample data"""
-    # Check if levels already exist
-    existing_count = await db.cryptogram_levels.count_documents({})
-    if existing_count > 0:
-        return {"message": "Levels already initialized", "count": existing_count}
-    
-    # Turkish sample texts for cryptograms
-    sample_texts = [
-        # Easy levels (1-10)
-        "MERHABA DUNYA",
-        "BUGÜN HAVA ÇOK GÜZEL",
-        "KITAP OKUMAK FAYDALIDIR",
-        "SPOR YAPMAK SAĞLIKLIDIR",
-        "MÜZIK DİNLEMEK KEYİFLİDIR",
-        "BAHÇEDE ÇİÇEKLER AÇMIŞ",
-        "KEDI EVE GELDİ",
-        "OKULA GİTMEK LAZIM",
-        "YEMEK PİŞİRMEK ZEVKLI",
-        "ARKADAŞ OLMAK GÜZEL",
-        
-        # Medium levels (11-20)
-        "HAYAT BİR MACERA GİBİ GEÇİP GİDER",
-        "BİLGİ GÜÇ DEMEKTİR VE ÖĞRENMEKTİR",
-        "DOSTLUK EN DEĞERLİ HAZINE SAYILIR",
-        "SABIR VE AZIM HER ŞEYİN ÜSTESİNDEN GELİR",
-        "GÜZEL GÜNLER HEP BERABER YAŞANIR",
-        "UMUT HİÇBİR ZAMAN TÜKENMEYECEKTİR",
-        "ÇALIŞKAN İNSAN HEP BAŞARILI OLUR",
-        "DOĞA ANA HEPİMİZİN ORTAK EVİDİR",
-        "SANAT RUHU BESLEYEN BİR BESİN KAYNAĞI",
-        "SEVGİ VE SAYGI İLE DÜNYA DAHA GÜZEL",
-        
-        # Hard levels (21-30)
-        "İNSAN YAŞADIĞI SÜRECE ÖĞRENMEYE VE GELİŞMEYE DEVAM ETMELİDİR",
-        "BAŞARI SADECE ÇALIŞMAKLA DEĞİL AKILLI ÇALIŞMAKLA ELDE EDİLİR",
-        "GERÇEK MUTLULUK İÇİMİZDEN GELEN BİR HİSSİR VE PAYLAŞTIKÇA ARTAR",
-        "BİLİM VE TEKNOLOJİ İNSANLIĞIN GELECEK NESİLLERE ARMAĞANDIR",
-        "KÜLTÜR VE SANAT BİR MİLLETİN AYNASI VE TAHİLİNİN GÖSTERGESİDİR",
-        "ÇEVRE KORUMA BİLİNCİ GELECEK NESİLLERE KALACAK EN BÜYÜK MİRASTIR",
-        "EĞİTİM SİSTEMİ BİR ÜLKENIN KALKINMASINDA EN ÖNEMLİ ETKEN SAYILIR",
-        "TOPLUMSAL DAYANIŞMA VE YARDIMLAŞMA MEDENİYETİN TEMELİ OLUŞTURUR",
-        "DİL VE KÜLTÜR KORUMA BİR MİLLETİN VAR OLMA MÜCADELESİNİN PARÇASIDIR",
-        "BARIŞÇIL BİR DÜNYA İÇİN TÜM İNSANLAR BİRLİKTE ÇALIŞMALI VE SAVAŞMALDIR",
-        
-        # Expert levels (31-40)
-        "FELSEFİ DÜŞÜNCE İNSANIN VARLIK SERÜVENİNDE EN DEĞERLİ REHBERLERDEN BİRİDİR VE HAYATIN ANLAM ARAYIŞINDA BİZE YOL GÖSTERİR",
-        "PSİKOLOJİK SAĞLIK FİZİKSEL SAĞLIK KADAR ÖNEMLİDİR VE İNSANIN TOPLUMSAL İLİŞKİLERİNDE VE KİŞİSEL GELİŞİMİNDE TEMEL ROL OYNAR",
-        "KÜRESEL İKLİM DEĞİŞİKLİĞİ GÜNÜMÜZün EN CİDDİ PROBLEMLERİNDEN BİRİ HALINE GELMİŞ VE ÇÖZÜMÜ TÜM İNSANLIĞIN ORTAK SORUMLULUĞUDUR",
-        "YAPAY ZEKA VE OTOMASYON TEKNOLOJİLERİ ÇALIŞMA HAYATINI KÖKTEN DEĞİŞTİRMEKTE VE YENİ BECERİLER KAZANMAYI ZORUNLU HALE GETİRMEKTEDİR",
-        "SOSYAL MEDYA VE DİJİTAL İLETİŞİM ARAÇLARI İNSAN İLİŞKİLERİNİ YENİDEN ŞEKİLLENDİRİRKEN AYNI ZAMANDA YENİ SORUNLAR DA YARATMAKTADIR",
-        "BİYOETİK KONULARI MODERN TIP VE BİLİMİN GELİŞİMİ İLE BİRLİKTE DAHA KARMAŞIK HALE GELMİŞ VE ETİK KURULLARIN ROLÜNÜ ARTIRMAKTADIR",
-        "UZAY ARAŞTIRMALARI VE KEŞİFLERİ İNSANLIĞIN EVREN HAKKINDAKİ BİLGİLERİNİ GENİŞLETMEKTE VE GELECEKTEKİ YAŞAMIMIZı ETKİLEYECEK BULUŞLARA YOL AÇMAKTADIR",
-        "KÜLTÜRLERARASı DİYALOG VE ANLAYIŞ KÜRESEL BARIŞIN TESİSİNDE EN ÖNEMLİ FAKTÖRLERDEN BİRİ OLARAK KABUL EDİLMEKTE VE ÇATIŞMALARIN ÇÖZÜMÜNDE ROL OYNAMAKTADIR",
-        "SÜRDÜRÜLEBİLİR KALKINMA HEDEFLERİ ÇEVRECİ YAKLAŞIMLAR VE EKONOMİK BÜYÜME ARASINDAKİ DENGEYİ KORUYARAK GELECEK NESİLLERE YAŞANIR BİR DÜNYA BIRAKMAYI AMAÇLAMAKTADIR",
-        "İNSAN HAKLARI VE DEMOKRASİ PRENSİPLERİ KÜRESEL ÇAPta KABUL GÖREN EVRENSEL DEĞERLER HALİNE GELMİŞ OLSA DA FARKLI KÜLTÜRLER VE SİSTEMLER ARASINDA UYGULAMA FARKLILIKLARI YAŞANMAYA DEVAM ETMEKTEDİR"
-    ]
-    
-    levels = []
-    for i, text in enumerate(sample_texts, 1):
+@api_router.get("/sudoku/new/{level}")
+async def get_new_sudoku(level: int):
+    """Generate a new Sudoku puzzle for given level"""
+    try:
         # Determine difficulty based on level
-        if i <= 10:
-            difficulty = "easy"
-            time_limit = 300  # 5 minutes
-        elif i <= 20:
-            difficulty = "medium"
-            time_limit = 450  # 7.5 minutes
-        elif i <= 30:
-            difficulty = "hard"
-            time_limit = 600  # 10 minutes
+        if level <= 10:
+            difficulty = 'kolay'
+        elif level <= 20:
+            difficulty = 'orta'
+        elif level <= 30:
+            difficulty = 'zor'
         else:
-            difficulty = "expert"
-            time_limit = 900  # 15 minutes
+            difficulty = 'uzman'
         
-        # Create cipher mapping
-        alphabet = "ABCÇDEFGĞHIİJKLMNOÖPQRSŞTUÜVWXYZ"
-        shuffled = list(alphabet)
-        random.Random(i * 42).shuffle(shuffled)  # Deterministic shuffle based on level
-        cipher_map = dict(zip(alphabet, shuffled))
+        # Generate complete solution
+        solution = generate_complete_sudoku()
         
-        # Encrypt text
-        encrypted_text = ""
-        for char in text:
-            if char in cipher_map:
-                encrypted_text += cipher_map[char]
-            else:
-                encrypted_text += char
+        # Create puzzle by removing numbers
+        puzzle = create_puzzle_from_solution(solution, difficulty)
         
-        # Create hint (reveal 2-3 letters)
-        revealed_letters = random.Random(i * 123).sample([k for k in cipher_map.keys() if k in text], min(3, len(set(text))))
-        hint = f"İpucu: {', '.join([f'{k}={cipher_map[k]}' for k in revealed_letters])}"
-        
-        level = CryptogramLevel(
-            level=i,
+        # Save to database
+        sudoku_puzzle = SudokuPuzzle(
+            level=level,
             difficulty=difficulty,
-            original_text=text,
-            encrypted_text=encrypted_text,
-            cipher_map=cipher_map,
-            hint=hint,
-            time_limit=time_limit
+            puzzle=puzzle,
+            solution=solution
         )
-        levels.append(level.dict())
-    
-    # Insert levels into database
-    await db.cryptogram_levels.insert_many(levels)
-    
-    return {"message": "Levels initialized successfully", "count": len(levels)}
+        
+        await db.sudoku_puzzles.insert_one(sudoku_puzzle.dict())
+        
+        return {
+            "id": sudoku_puzzle.id,
+            "level": level,
+            "difficulty": difficulty,
+            "puzzle": puzzle
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/sudoku/validate")
+async def validate_sudoku(data: dict):
+    """Validate if the submitted Sudoku solution is correct"""
+    try:
+        puzzle_id = data.get("puzzle_id")
+        user_solution = data.get("solution")
+        
+        # Get the original puzzle from database
+        puzzle_doc = await db.sudoku_puzzles.find_one({"id": puzzle_id})
+        if not puzzle_doc:
+            raise HTTPException(status_code=404, detail="Puzzle not found")
+        
+        correct_solution = puzzle_doc["solution"]
+        
+        # Check if user solution matches correct solution
+        is_correct = user_solution == correct_solution
+        
+        return {
+            "is_correct": is_correct,
+            "correct_solution": correct_solution if not is_correct else None
+        }
+        
+    except HTTPException:
+        raise  # Re-raise HTTPException to preserve status code
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/user/progress/{game_type}")
+async def get_user_progress(game_type: str):
+    """Get user progress for a specific game type"""
+    try:
+        progress = await db.user_progress.find_one({
+            "user_id": "default_user",
+            "game_type": game_type
+        }, {"_id": 0})  # Exclude MongoDB _id field
+        
+        if not progress:
+            # Create new progress record
+            new_progress = UserProgress(game_type=game_type)
+            await db.user_progress.insert_one(new_progress.dict())
+            return new_progress.dict()
+        
+        return progress
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/user/progress/update")
+async def update_user_progress(data: dict):
+    """Update user progress after completing a level"""
+    try:
+        game_type = data.get("game_type")
+        level_completed = data.get("level")
+        time_taken = data.get("time_taken", 0)
+        
+        # Find existing progress
+        progress = await db.user_progress.find_one({
+            "user_id": "default_user",
+            "game_type": game_type
+        }, {"_id": 0})  # Exclude MongoDB _id field
+        
+        if progress:
+            # Update existing progress
+            completed_levels = progress.get("completed_levels", [])
+            if level_completed not in completed_levels:
+                completed_levels.append(level_completed)
+            
+            highest_level = max(progress.get("highest_level", 1), level_completed + 1)
+            total_games = progress.get("total_games_played", 0) + 1
+            total_time = progress.get("total_time_played", 0) + time_taken
+            
+            await db.user_progress.update_one(
+                {"user_id": "default_user", "game_type": game_type},
+                {
+                    "$set": {
+                        "completed_levels": completed_levels,
+                        "highest_level": highest_level,
+                        "total_games_played": total_games,
+                        "total_time_played": total_time,
+                        "updated_at": datetime.utcnow()
+                    }
+                }
+            )
+        else:
+            # Create new progress
+            new_progress = UserProgress(
+                game_type=game_type,
+                completed_levels=[level_completed],
+                highest_level=level_completed + 1,
+                total_games_played=1,
+                total_time_played=time_taken
+            )
+            await db.user_progress.insert_one(new_progress.dict())
+        
+        return {"success": True}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/game/session/start")
+async def start_game_session(data: dict):
+    """Start a new game session"""
+    try:
+        session = GameSession(
+            game_type=data.get("game_type"),
+            level=data.get("level"),
+            difficulty=data.get("difficulty", "kolay")
+        )
+        
+        await db.game_sessions.insert_one(session.dict())
+        return {"session_id": session.id}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/game/session/end")
+async def end_game_session(data: dict):
+    """End a game session"""
+    try:
+        session_id = data.get("session_id")
+        completed = data.get("completed", False)
+        moves_count = data.get("moves_count", 0)
+        hints_used = data.get("hints_used", 0)
+        
+        end_time = datetime.utcnow()
+        
+        # Calculate time taken
+        session = await db.game_sessions.find_one({"id": session_id})
+        if session:
+            start_time = session["start_time"]
+            time_taken = int((end_time - start_time).total_seconds())
+            
+            await db.game_sessions.update_one(
+                {"id": session_id},
+                {
+                    "$set": {
+                        "end_time": end_time,
+                        "completed": completed,
+                        "time_taken": time_taken,
+                        "moves_count": moves_count,
+                        "hints_used": hints_used
+                    }
+                }
+            )
+            
+            return {"success": True, "time_taken": time_taken}
+        
+        return {"success": False, "error": "Session not found"}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # Include the router in the main app
 app.include_router(api_router)
@@ -250,7 +341,7 @@ app.include_router(api_router)
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
