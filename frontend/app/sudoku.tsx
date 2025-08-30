@@ -764,4 +764,14 @@ const styles = StyleSheet.create({
   disabledText: {
     color: '#666',
   },
+  correctMove: {
+    backgroundColor: '#4ecdc4',
+    borderColor: '#4ecdc4',
+    borderWidth: 2,
+  },
+  incorrectMove: {
+    backgroundColor: '#ff6b6b',
+    borderColor: '#ff6b6b',
+    borderWidth: 2,
+  },
 });
